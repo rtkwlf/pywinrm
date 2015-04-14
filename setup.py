@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 __version__ = '0.0.4'
-project_name = 'pywinrm'
+project_name = 'pywinrm-awn'
 
 # PyPi supports only reStructuredText, so pandoc should be installed
 # before uploading package
@@ -20,7 +20,7 @@ setup(
     keywords='winrm ws-man devops ws-management'.split(' '),
     author='Alexey Diyan',
     author_email='alexey.diyan@gmail.com',
-    url='http://github.com/diyan/pywinrm/',
+    url='http://github.com/rtkwlf/pywinrm/',
     license='MIT license',
     packages=('winrm', 'winrm.tests'),
     package_data={'winrm.tests': ['*.ps1']},
