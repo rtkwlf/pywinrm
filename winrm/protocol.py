@@ -5,12 +5,13 @@ import xml.etree.ElementTree as ET
 from isodate.isoduration import duration_isoformat
 import xmltodict
 from winrm.transport import HttpPlaintext, HttpKerberos, HttpSSL
-import cStringIO
+# Use StringIO rather than cStringIO because it supports Unicode characters
+import StringIO
 
 class BufferedSplitStream(object):
     def __init__(self, ostream):
         self.ostream = ostream
-        self.buffer = cStringIO.StringIO()
+        self.buffer = StringIO.StringIO()
 
     def write(self, str):
         if self.ostream:
@@ -30,9 +31,16 @@ class Protocol(object):
     DEFAULT_MAX_ENV_SIZE = 153600
     DEFAULT_LOCALE = 'en-US'
 
+    CODEPAGES = {
+      437: 'cp437',
+      65001: 'utf_8'
+    }
+    DEFAULT_CODEPAGE = 65001
+
     def __init__(self, endpoint, transport='plaintext', username=None,
                  password=None, realm=None, service=None, keytab=None,
-                 ca_trust_path=None, cert_pem=None, cert_key_pem=None):
+                 ca_trust_path=None, cert_pem=None, cert_key_pem=None,
+                 codepage=None):
         """
         @param string endpoint: the WinRM webservice endpoint
         @param string transport: transport type, one of 'kerberos' (default), 'ssl', 'plaintext'  # NOQA
@@ -44,11 +52,18 @@ class Protocol(object):
         @param string ca_trust_path: Certification Authority trust path
         @param string cert_pem: client authentication certificate file path in PEM format  # NOQA
         @param string cert_key_pem: client authentication certificate key file path in PEM format  # NOQA
+        @param int codepage: integer referencing one of the possible codepages in Protocol.CODEPAGES
         """
         self.endpoint = endpoint
-        self.timeout = Protocol.DEFAULT_TIMEOUT
-        self.max_env_sz = Protocol.DEFAULT_MAX_ENV_SIZE
-        self.locale = Protocol.DEFAULT_LOCALE
+        self.timeout = self.DEFAULT_TIMEOUT
+        self.max_env_sz = self.DEFAULT_MAX_ENV_SIZE
+        self.locale = self.DEFAULT_LOCALE
+
+        if codepage:
+          self.codepage = codepage
+        else:
+          self.codepage = self.DEFAULT_CODEPAGE
+
         if transport == 'plaintext':
             self.transport = HttpPlaintext(endpoint, username, password)
         elif transport == 'kerberos':
@@ -75,7 +90,7 @@ class Protocol(object):
 
     def open_shell(self, i_stream='stdin', o_stream='stdout stderr',
                    working_directory=None, env_vars=None, noprofile=False,
-                   codepage=437, lifetime=None, idle_timeout=None):
+                   codepage=None, lifetime=None, idle_timeout=None):
         """
         Create a Shell on the destination host
         @param string i_stream: Which input stream to open. Leave this alone
@@ -86,10 +101,14 @@ class Protocol(object):
         @param dict env_vars: environment variables to set for the shell. For
          instance: {'PATH': '%PATH%;c:/Program Files (x86)/Git/bin/', 'CYGWIN':
           'nontsec codepage:utf8'}
+        @param codepage: a codepage integer, referencing a Response.CODEPAGES key
         @returns The ShellId from the SOAP response.  This is our open shell
          instance on the remote machine.
         @rtype string
         """
+        if not codepage:
+          codepage = self.codepage
+
         rq = {'env:Envelope': self._get_soap_header(
             resource_uri='http://schemas.microsoft.com/wbem/wsman/1/windows/shell/cmd',  # NOQA
             action='http://schemas.xmlsoap.org/ws/2004/09/transfer/Create')}
@@ -102,7 +121,7 @@ class Protocol(object):
                 },
                 {
                     '@Name': 'WINRS_CODEPAGE',
-                    '#text': str(codepage)  # TODO remove str call
+                    '#text': str(self.codepage)  # TODO remove str call
                 }
             ]
         }
@@ -352,14 +371,13 @@ class Protocol(object):
         stream_nodes = [node for node in root.findall('.//*')
                         if node.tag.endswith('Stream')]
         return_code = -1
+        decode_type = self.CODEPAGES.get(self.codepage, self.CODEPAGES[self.DEFAULT_CODEPAGE])
         for stream_node in stream_nodes:
             if stream_node.text:
                 if stream_node.attrib['Name'] == 'stdout':
-                    stdout_stream.write(str(base64.b64decode(
-                        stream_node.text.encode('ascii'))))
+                    stdout_stream.write(base64.b64decode(stream_node.text).decode(decode_type))
                 elif stream_node.attrib['Name'] == 'stderr':
-                    stderr_stream.write(str(base64.b64decode(
-                        stream_node.text.encode('ascii'))))
+                    stderr_stream.write(base64.b64decode(stream_node.text).decode(decode_type))
 
         # We may need to get additional output if the stream has not finished.
         # The CommandState will change from Running to Done like so:

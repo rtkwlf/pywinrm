@@ -37,11 +37,12 @@ class Response(object):
 
 class Session(object):
     # TODO implement context manager methods
-    def __init__(self, target, auth, transport='plaintext'):
+    def __init__(self, target, auth, transport='plaintext', codepage=None):
         username, password = auth
         self.url = self._build_url(target, transport)
         self.protocol = Protocol(self.url, transport=transport,
-                                 username=username, password=password)
+                                 username=username, password=password,
+                                 codepage=codepage)
 
     def run_cmd(self, command, args=(), ostreams=()):
         # TODO optimize perf. Do not call open/close shell every time
@@ -94,9 +95,8 @@ class Session(object):
                     new_msg += s.text.replace("_x000D__x000A_", "\n")
             except Exception as e:
                 # if any of the above fails, the msg was not true xml
-                # print a warning and return the orignal string
-                print("Warning: there was a problem converting the Powershell"
-                      " error message: %s" % (e))
+                # return the original string prepended with an error; don't print anything
+                msg = "XML decode failed: " + msg
             else:
                 # if new_msg was populated, that's our error message
                 # otherwise the original error message will be used
