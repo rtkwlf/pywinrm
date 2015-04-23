@@ -33,9 +33,9 @@ class Protocol(object):
 
     CODEPAGES = {
       437: 'cp437',
-      65001: 'utf_8'
+      65001: 'utf-8-sig'
     }
-    DEFAULT_CODEPAGE = 65001
+    DEFAULT_CODEPAGE = 437
 
     def __init__(self, endpoint, transport='plaintext', username=None,
                  password=None, realm=None, service=None, keytab=None,
